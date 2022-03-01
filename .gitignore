@@ -1,0 +1,11 @@
+20??-??-??-????-*-????????????/
+canu-master-repo/
+verkko-master-repo/
+recipes/*/reads/
+recipes/*/reads
+recipes/*/refasm
+recipes/*/refasm-*/
+recipes/*/refasm/
+reads/
+references/
+regression/slack-token*
