@@ -25,7 +25,8 @@ use List::Util qw(min max);
 #  Some functions first.  (Search for 'parse' to find the start of main.)
 #
 
-sub readFile ($$$) {
+sub readFile ($$$$) {
+    my $logs      = shift @_;
     my $file      = shift @_;
     my $linelimit = shift @_;
     my $sizelimit = shift @_;
@@ -35,26 +36,45 @@ sub readFile ($$$) {
 
     my $lines;
 
-    print STDERR "READFILE $file\n";
+    my $f = "${file}:\n";
 
     if (-e "$file") {
         open(F, "< $file");
-        while (!eof(F) && ($nl < $linelimit) && ($nb < $sizelimit)) {
+        while (!eof(F)) {
             $_ = <F>;
 
-            $lines .= $_;
+            my $limit = (($nl < $linelimit) && ($nb < $sizelimit)) ? 0 : 1;
+            my $empty = 0;
 
-            $nl += 1;
-            $nb += length($_);
+            $empty = 1  if ($_ =~ m/^\s*$/);
+            $empty = 1  if ($_ =~ m/^=\s+\d+\s+\]\[\s*$/);
+
+            if (($limit == 0) || ($empty == 0)) {
+                $nl    += 1;
+                $nb    += length($_);
+                $lines .= $_;
+            }
+
+            else {
+                print STDERR "EMPTY: $_";
+
+                push @$logs, "$f```\n$lines```\n";
+
+                undef $f;   #  Report the filename only once.
+
+                $nl     = 0;
+                $nb     = 0;
+                $lines  = "";
+            }
+
         }
+
         close(F);
     }
 
-    if (!defined($lines)) {
-        return(undef);
+    if (defined($lines)) {
+        push @$logs, "$f```\n$lines```\n";
     }
-
-    return("${file}:\n```\n${lines}```\n");
 }
 
 
@@ -317,8 +337,8 @@ sub diffQ ($$$$$$$@) {
 
     open(D, "> $file.diffs");
 
-    print D sprintf("%-30s %15s %s %-15s\n", "Quast Measure", "REFERENCE", "", "REGRESSION");
-    print D sprintf("%-30s %15s %s %-15s\n", "------------------------------", "---------------", "--", "---------------");
+    print D sprintf("%-30s %15s %2s %-15s\n", "Quast Measure", "REFERENCE", "", "REGRESSION");
+    print D sprintf("%-30s %15s %2s %-15s\n", "------------------------------", "---------------", "--", "---------------");
 
     my $diffs = 0;
 
@@ -345,7 +365,6 @@ sub diffQ ($$$$$$$@) {
                ($k eq "LG50") ||
                ($k eq "LG90") ||
                ($k eq "LGA90")) {
-            print "EXACT $k $r $a\n";
             if ($r ne $a) {
                 $c = "!=";
             }
@@ -355,8 +374,6 @@ sub diffQ ($$$$$$$@) {
         else {
             my $diff = abs($r - $a);
             my $ave  = ($r + $a) / 2;
-
-            print "INEXACT $k $r $a - $diff $ave\n";
 
             if ($diff / $ave > 0.1) {
                 $c = "!=";
@@ -404,8 +421,12 @@ sub filterQuastStdout ($$) {
         if (m!^\s*Real\sAlignment\s(\d+):\s(\d+)\s(\d+)\s\|\s(\d+)\s(\d+)\s\|\s(\d+)\s(\d+)\s\|\s(\d+.\d+)\s\|\s(.*)\s(.*)\s*$!) {
             if ($type ne "") {
                 my $msg1 = sprintf("%15s %10d-%-10d %10d-%-10d %s\n", $n1, $b1, $e1, $2, $3, $9);
-                my $msg2 = sprintf("%-23s %6.3f%%%15s%6.3f%%\n", $type, $idt, "", $8);
+                my $msg2 = sprintf("%-22s %7.3f%%%14s%7.3f%%\n", $type, $idt, "", $8);
                 my $msg3 = sprintf("%15s %10d-%-10d %10d-%-10d %s\n", $n2, $b2, $e2, $4, $5, $10);
+
+                $ml = ($ml < length($msg1)) ? length($msg1) : $ml;
+                $ml = ($ml < length($msg3)) ? length($msg2) : $ml;
+                $ml = ($ml < length($msg3)) ? length($msg3) : $ml;
 
                 push @misasm, "$n1$b1\0\n$msg1$msg2$msg3";
             }
@@ -414,7 +435,7 @@ sub filterQuastStdout ($$) {
         }
 
         if (m/^\s*Indel.*insertion\sof\slength\s(\d+);\s+(\d+)\smismat/) {
-            $type = "INDEL $1 bp $2 mm";
+            $type = "INDEL $1 bp";   #  with $2 mismatches
         }
         if (m/^\s*Stretch\s+of\s+(\d+)\s+mismatches/) {
             $type = "MISMATCH $1 mm";
@@ -639,23 +660,23 @@ my $d28 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_
 $report .= "*Quast* has differences.\n"   if ($d21 || $d23 || $d24 || $d25 || $d26 || $d27 || $d28);
 
 if ($d21) {
-    push @logs, readFile("quast/report.tsv.diffs", 60, 8192);
+    readFile(\@logs, "quast/report.tsv.diffs", 60, 2048);
 }
 
 #if ($d26) {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.mis_contigs.info.diffs", 60, 8192);
+#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.mis_contigs.info.diffs", 60, 2048);
 #}
 
 #if ($d27) {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.unaligned.info.diffs", 60, 8192);
+#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.unaligned.info.diffs", 60, 2048);
 #}
 
 if ($d28) {
-    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.stdout.filtered.diffs", 60, 8192);
+    readFile(\@logs, "quast/contigs_reports/contigs_report_assembly.stdout.filtered.diffs", 3, 2048);
 }
 
 #else {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.stdout.filtered", 60, 8192);
+#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.stdout.filtered", 60, 2048);
 #}
 
 
@@ -714,7 +735,6 @@ else {
         print $report;
         foreach my $log (@logs) {
             if (defined($log)) {
-                print "\n----------------------------------------\n";
                 print $log;
             }
         }
