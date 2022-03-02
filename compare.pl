@@ -18,6 +18,7 @@ use warnings;
 use FindBin;
 use lib "$FindBin::RealBin/regression";
 use Slack;
+use Compare;
 
 use List::Util qw(min max);
 
@@ -236,235 +237,6 @@ sub diffB ($$$$$$$) {
 }
 
 
-
-sub saveQuastReportLine ($) {
-    my ($k, $v) = split '\t', $_;
-
-    chomp $k;
-    chomp $v;
-
-    if (($k =~ m/Assembly/) ||
-        ($k =~ m/>=\s1000\sbp/) ||
-        ($k =~ m/>=\s5000\sbp/) ||
-        ($k =~ m/>=\s10000\sbp/) ||
-        ($k =~ m/>=\s25000\sbp/) ||
-        ($k =~ m/N50/) ||
-        ($k =~ m/N75/) ||
-        ($k =~ m/L50/) ||
-        ($k =~ m/L75/) ||
-        ($k =~ m/scaffold\sgap/) ||
-        ($k =~ m/N.s\sper/) ||
-        ($k =~ m/NA50/) ||
-        ($k =~ m/NGA50/) ||
-        ($k =~ m/NA75/) ||
-        ($k =~ m/NGA75/) ||
-        ($k =~ m/LA50/) ||
-        ($k =~ m/LGA50/) ||
-        ($k =~ m/LA75/) ||
-        ($k =~ m/LGA75/)) {
-        return(undef);
-    }
-
-    #  Report only 3 fraction digits instead of up to 10.
-    if ($k =~ m/auN/) {
-        $v = sprintf("%.3f", $v);
-    }
-
-    #  Report 'whole.part' instead of '0 + 9 part'.
-    #if ($k =~ m/unaligned\scontig/) {
-    #    if ($v =~ m/(\d+)\s\+\s(\d+)\spart/) {
-    #        $v = sprintf("%d.%d", $1, $2);
-    #    }
-    #}
-
-    return($k, $v);
-}
-
-
-sub diffQ ($$$$$$$@) {
-    my $newf   = shift @_;   #  List of files that are only in the assembly
-    my $misf   = shift @_;   #  List of files that are only in the reference (missing from the assembly)
-    my $samf   = shift @_;   #  List of files that are the same, either identical files, or both missing
-    my $diff   = shift @_;   #  List of files that are not the same
-    my $difc   = shift @_;   #  Number of significant differences found.
-    my $recipe = shift @_;
-    my $file   = shift @_;
-
-    my %key;
-
-    my $reffile = "../../recipes/$recipe/refasm/$file";
-    my %ref;
-    my $asmfile = "./$file";
-    my %asm;
-
-    #  If BOTH are missing, they're the same.
-
-    if ((! -e $asmfile) &&
-        (! -e $reffile)) {
-        $$samf .= "  $file\n";              return(0);
-    }
-
-    #  If either file isn't present, report a significant difference (but don't show details).
-
-    if (! -e $reffile) { $$newf .= "  $file\n";   $$difc++;   return(0); }
-    if (! -e $asmfile) { $$misf .= "  $file\n";   $$difc++;   return(0); }
-
-    #  Load values from the reference report.
-
-    open(F, "< $reffile");
-    while (<F>) {
-        my ($k, $v) = saveQuastReportLine($_);
-        if (defined($v)) {
-            $key{$k}++;
-            $ref{$k} = $v;
-        }
-    }
-    close(F);
-
-    #  Load values from the regression report.
-
-    open(F, "< $asmfile");
-    while (<F>) {
-        my ($k, $v) = saveQuastReportLine($_);
-        if (defined($v)) {
-            $key{$k}++;
-            $asm{$k} = $v;
-        }
-    }
-    close(F);
-
-    #  Compare keys.  Report any differences.
-
-    open(D, "> $file.diffs");
-
-    print D sprintf("%-30s %15s %2s %-15s\n", "Quast Measure", "REFERENCE", "", "REGRESSION");
-    print D sprintf("%-30s %15s %2s %-15s\n", "------------------------------", "---------------", "--", "---------------");
-
-    my $diffs = 0;
-
-    foreach my $k (sort keys %key) {
-        my $r = $ref{$k};
-        my $a = $asm{$k};
-        my $c = "==";
-
-        #  If either isn't defined, they're different.
-        if    (!defined($r))  { $c = "!="; }
-        elsif (!defined($a))  { $c = "!="; }
-
-        #  Require exact match for some values.
-        elsif (($k eq "# contigs") ||
-               ($k eq "# contigs (>= 0 bp)") ||
-               ($k eq "# contigs (>= 50000 bp)") ||
-               ($k eq "# local misassemblies") ||
-               ($k eq "# misassembled contigs") ||
-               ($k eq "# misassemblies") ||
-               ($k eq "# possible TEs") ||
-               ($k eq "# unaligned contigs") ||   #  NOT an integer: '0 + 9 part'
-               ($k eq "L90") ||
-               ($k eq "LA90") ||
-               ($k eq "LG50") ||
-               ($k eq "LG90") ||
-               ($k eq "LGA90")) {
-            if ($r ne $a) {
-                $c = "!=";
-            }
-        }
-
-        #  But allow some differences for all the rest.
-        else {
-            my $diff = abs($r - $a);
-            my $ave  = ($r + $a) / 2;
-
-            if ($diff / $ave > 0.1) {
-                $c = "!=";
-            }
-        }
-
-
-        if ($c eq "!=") {
-            print D sprintf("%-30s %15s %s %-15s\n", $k, $r, $c, $a);
-
-            $diffs++;
-        }
-    }
-
-    print D sprintf("%-30s %15s %s %15s\n", "------------------------------", "---------------", "--", "---------------");
-    close(D);
-
-    #  If differences exist, report a significant difference and show details.
-
-    if ($diffs > 0) {
-        $$diff .= "  $file\n";  $$difc++;   return(1);
-    } else {
-        $$samf .= "  $file\n";              return(0);
-    }
-}
-
-
-
-sub filterQuastStdout ($$) {
-    my $in = shift @_;
-    my $ot = shift @_;
-    my $lt;
-    my $ml = 0;
-
-    my @misasm;
-
-    my ($type, $aid, $b1, $e1, $b2, $e2, $l1, $l2, $idt, $n1, $n2) = ("");
-
-    open(IN, "< $in") or die "failed to open '$in' for reading: $!\n";
-    while (<IN>) {
-        s/^\s+//;
-        s/\s+$//;
-
-        #Real Alignment 1: 18027364 18061019 | 4 33649 | 33656 33646 | 99.92 | 2L tig00001804
-        if (m!^\s*Real\sAlignment\s(\d+):\s(\d+)\s(\d+)\s\|\s(\d+)\s(\d+)\s\|\s(\d+)\s(\d+)\s\|\s(\d+.\d+)\s\|\s(.*)\s(.*)\s*$!) {
-            if ($type ne "") {
-                my $msg1 = sprintf("%15s %10d-%-10d %10d-%-10d %s\n", $n1, $b1, $e1, $2, $3, $9);
-                my $msg2 = sprintf("%-22s %7.3f%%%14s%7.3f%%\n", $type, $idt, "", $8);
-                my $msg3 = sprintf("%15s %10d-%-10d %10d-%-10d %s\n", $n2, $b2, $e2, $4, $5, $10);
-
-                $ml = ($ml < length($msg1)) ? length($msg1) : $ml;
-                $ml = ($ml < length($msg3)) ? length($msg2) : $ml;
-                $ml = ($ml < length($msg3)) ? length($msg3) : $ml;
-
-                push @misasm, "$n1$b1\0\n$msg1$msg2$msg3";
-            }
-
-            ($type, $aid, $b1, $e1, $b2, $e2, $l1, $l2, $idt, $n1, $n2) = ("", $1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-        }
-
-        if (m/^\s*Indel.*insertion\sof\slength\s(\d+);\s+(\d+)\smismat/) {
-            $type = "INDEL $1 bp";   #  with $2 mismatches
-        }
-        if (m/^\s*Stretch\s+of\s+(\d+)\s+mismatches/) {
-            $type = "MISMATCH $1 mm";
-        }
-        if (m/^\s*Extensive\smisassembly\s\(inversion\)\sbetween/) {
-            $type = "INVERSION";
-        }
-        if (m/^\s*Extensive\smisassembly\s\(translocation\)\sbetween/) {
-            $type = "TRANSLOCATION";
-        }
-        if (m/^\s*Extensive\smisassembly\s\(relocation,\sinconsistency\s=\s(-*[0-9]*)\)\sbetween/) {
-            $type = "RELOCATION $1 bp";
-        }
-    }
-    close(IN);
-
-    @misasm = sort @misasm;
-
-    open(OT, "> $ot") or die "failed to open '$ot' for writing: $!\n";
-    foreach my $m (@misasm) {
-        my ($pos, $msg) = split '\0', $m;
-        print OT $msg;
-    }
-    close(OT);
-
-    return $ml;
-}
-
-
 #
 #  Parse the command line.
 #
@@ -621,68 +393,34 @@ my $IGNC = 0;
 my $difc = 0;
 
 my $report = "";
-my @logs;
-
 
 ########################################
 #  Check assembled contigs and the read layouts.  All we can do is report difference.
 #
 
-my $d06 = diffB(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.fasta");
-my $d07 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.gfa");
-my $d08 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.layout");
+my $d01 = diffB(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.fasta");
+my $d02 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.gfa");
+my $d03 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "assembly.layout");
 
-$report .= "*Contig sequences* have changed!  (but graph and layout are the same)\n"         if ( $d06 && !$d07 && !$d08);
-$report .= "*Contig graph* has changed!  (but sequence and layout are the same)\n"           if (!$d06 &&  $d07 && !$d08);
-$report .= "*Contig layouts* have changed!  (but sequence and graph are the same)\n"         if (!$d06 && !$d07 &&  $d08);
+$report .= "*Contig sequences* have changed!  (but graph and layout are the same)\n"         if ( $d01 && !$d02 && !$d03);
+$report .= "*Contig graph* has changed!  (but sequence and layout are the same)\n"           if (!$d01 &&  $d02 && !$d03);
+$report .= "*Contig layouts* have changed!  (but sequence and graph are the same)\n"         if (!$d01 && !$d02 &&  $d03);
 
-$report .= "*Contig sequences and graph* have changed!  (but layouts are the same)\n"        if ( $d06 &&  $d07 && !$d08);
-$report .= "*Contig sequences and layouts* have changed!  (but graph is the same)\n"         if ( $d06 && !$d07 &&  $d08);
-$report .= "*Contig graph and layouts* have changed!  (but sequences are the same)\n"        if (!$d06 &&  $d07 &&  $d08);
+$report .= "*Contig sequences and graph* have changed!  (but layouts are the same)\n"        if ( $d01 &&  $d02 && !$d03);
+$report .= "*Contig sequences and layouts* have changed!  (but graph is the same)\n"         if ( $d01 && !$d02 &&  $d03);
+$report .= "*Contig graph and layouts* have changed!  (but sequences are the same)\n"        if (!$d01 &&  $d02 &&  $d03);
 
-$report .= "*Contig sequences, graph and layouts* have all changed!\n"                       if ( $d06 &&  $d07 &&  $d08);
+$report .= "*Contig sequences, graph and layouts* have all changed!\n"                       if ( $d01 &&  $d02 &&  $d03);
 
 ########################################
 #  The primary check here is from quast.
 
-my $d21 = diffQ(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/report.tsv");
+my $d10 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/misassemblies_report.txt");
+my $d11 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/transposed_report_misassemblies.txt");
+my $d12 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/unaligned_report.txt");
 
-my $d23 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/misassemblies_report.txt");
-my $d24 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/transposed_report_misassemblies.txt");
-my $d25 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/unaligned_report.txt");
-
-my $d26 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/contigs_report_assembly.mis_contigs.info");
-my $d27 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/contigs_report_assembly.unaligned.info");
-
-my $qml = filterQuastStdout("quast/contigs_reports/contigs_report_assembly.stdout", "quast/contigs_reports/contigs_report_assembly.stdout.filtered");
-my $d28 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/contigs_report_assembly.stdout.filtered", 2, $qml, 99);
-
-$report .= "*Quast* has differences.\n"   if ($d21 || $d23 || $d24 || $d25 || $d26 || $d27 || $d28);
-
-if ($d21) {
-    readFile(\@logs, "quast/report.tsv.diffs", 60, 2048);
-}
-
-#if ($d26) {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.mis_contigs.info.diffs", 60, 2048);
-#}
-
-#if ($d27) {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.unaligned.info.diffs", 60, 2048);
-#}
-
-if ($d28) {
-    readFile(\@logs, "quast/contigs_reports/contigs_report_assembly.stdout.filtered.diffs", 3, 2048);
-}
-
-#else {
-#    push @logs, readFile("quast/contigs_reports/contigs_report_assembly.stdout.filtered", 60, 2048);
-#}
-
-
-
-
-#  Merge all the various differences found above into a single report.
+my $d13 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/contigs_report_assembly.mis_contigs.info");
+my $d14 = diffA(\$newf, \$misf, \$samf, \$diff, \$difc, $recipe, "quast/contigs_reports/contigs_report_assembly.unaligned.info");
 
 if ($newf ne "") {
     $report .= "\n";
@@ -696,45 +434,72 @@ if ($misf ne "") {
     $report .= $misf;
 }
 
+if ($d10 || $d11 || $d12 || $d13 || $d14) {
+    $report .= "*quast/contigs_reports/misassemblies_report.txt* differs.\n"                   if ($d10);
+    $report .= "*quast/contigs_reports/transposed_report_misassemblies.txt* differs.\n"        if ($d11);
+    $report .= "*quast/contigs_reports/unaligned_report.txt* differs.\n"                       if ($d12);
+    $report .= "*quast/contigs_reports/contigs_report_assembly.mis_contigs.info* differs.\n"   if ($d13);
+    $report .= "*quast/contigs_reports/contigs_report_assembly.unaligned.info* differs.\n"     if ($d14);
+}
+
+########################################
+#  Now do a detailed comparison of the quast results.
+
+my $rlog = compareReport($recipe, "quast/report.tsv");
+my @clog = compareContigReports($recipe, "quast/contigs_reports/contigs_report_assembly.stdout");
+
+#$report .= "*Quast* has differences.\n"   if ($d10 || $d11 || $d12 || $d13 || $d14 || (defined $rlog) || scalar(@clog));
+
+########################################
 #  Report the results.
 
-if ($difc == 0) {
-    my $head;
-
-    $head  = ":canu_success: *Report* for ${recipe}:\n";
-    $head .= "${regression} test assembly vs\n";
-    $head .= "${refregr} reference assembly\n";
-
-    # ":canu_success: *$recipe* has no differences between _${regression}_ and reference _${refregr}_.");
-
+if (($difc == 0) && (! defined($rlog)) && (scalar(@clog) == 0)) {
     if ($postSlack == 1) {
-        postHeading($head);
+        postHeading(":canu_success: *Report* for ${recipe}: *SUCCESS!*\n" .
+                    "${regression} test assembly vs\n" .
+                    "${refregr} reference assembly\n");
     } else {
-        print $head;
-        #"SUCCESS $recipe has no differences between ${regression} and reference _${refregr}_.\n";
+        print "${recipe} passed!\n";
     }
 }
 
 else {
-    my $head;
-
-    $head  = ":canu_fail: *Report* for ${recipe} *significant differences exist*:\n";
-    $head .= "${regression} test assembly vs\n";
-    $head .= "${refregr} reference assembly\n";
-
     if ($postSlack == 1) {
-        postHeading($head);
+        postHeading(":canu_fail: *Report* for ${recipe} *significant differences exist*:\n" .
+                    "${regression} test assembly vs\n" .
+                    "${refregr} reference assembly\n");
         postFormattedText(undef, $report);
-        foreach my $log (@logs) {
-            if (defined($log)) {
+
+        if (defined($rlog)) {
+            postHeading("*quast/report.tsv* has differences:");
+            postFormattedText(undef, $rlog);
+        } else {
+            postHeading("*quast/report.tsv* has *no* differences.");
+        }
+
+        if (scalar(@clog) > 0) {
+            postHeading("*quast/contigs_reports/contigs_report_assembly.stdout* has differences:");
+            foreach my $log (@clog) {
                 postFormattedText(undef, $log);
             }
+        } else {
+            postHeading("*quast/contigs_reports/contigs_report_assembly.stdout* has *no* differences:");
         }
-    } else {
-        print $head;
+    }
+
+    else {
+        print "$recipe FAILED!  $difc\n";
         print $report;
-        foreach my $log (@logs) {
-            if (defined($log)) {
+
+        if (defined($rlog)) {
+            print "\n";
+            print "quast/report.tsv differences:\n";
+            print $rlog;
+        }
+        if (scalar(@clog) > 0) {
+            print "\n";
+            print "quast/contigs_reports/contigs_report_assembly.stdout differences:\n";
+            foreach my $log (@clog) {
                 print $log;
             }
         }
