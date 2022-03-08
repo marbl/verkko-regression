@@ -71,7 +71,6 @@ updateAssembly() {
     saveFile  quast/contigs_reports/contigs_report_assembly.mis_contigs.info
     saveFile  quast/contigs_reports/contigs_report_assembly.unaligned.info
     saveFile  quast/contigs_reports/contigs_report_assembly.stdout
-    saveFile  quast/contigs_reports/contigs_report_assembly.stdout.filtered
 
     echo "Reference assembly updated."
 }
