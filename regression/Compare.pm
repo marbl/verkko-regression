@@ -150,7 +150,7 @@ sub compareContigReports ($$) {
 
         if      ($diff eq "ref") {
             my $log = (sprintf("```\n") .
-                       sprintf("%-*s ][ *s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
+                       sprintf( "%*s ][ %s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
                        sprintf("%-*s ][\n", $refml, $ref1) .
                        sprintf("%-*s ][\n", $refml, $ref2) .
                        sprintf("%-*s ][\n", $refml, $ref3) .
@@ -158,7 +158,7 @@ sub compareContigReports ($$) {
             push @logs, $log;
         } elsif ($diff eq "reg") {
             my $log = (sprintf("```\n") .
-                       sprintf("%-*s ][ *s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
+                       sprintf( "%*s ][ %s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
                        sprintf("%-*s ][ %s\n", $refml, "", $reg1) .
                        sprintf("%-*s ][ %s\n", $refml, "", $reg2) .
                        sprintf("%-*s ][ %s\n", $refml, "", $reg3) .
@@ -166,7 +166,7 @@ sub compareContigReports ($$) {
             push @logs, $log;
         } elsif ($diff eq "yes") {
             my $log = (sprintf("```\n") .
-                       sprintf("%-*s ][ *s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
+                       sprintf( "%*s ][ %s\n", $refml, "REFERENCE ASSEMBLY", "REGRESSION ASSEMBLY") .
                        sprintf("%-*s ][ %s\n", $refml, $ref1, $reg1) .
                        sprintf("%-*s ][ %s\n", $refml, $ref2, $reg2) .
                        sprintf("%-*s ][ %s\n", $refml, $ref3, $reg3) .
