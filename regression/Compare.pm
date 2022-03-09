@@ -113,11 +113,13 @@ sub compareContigReports ($$) {
         #  If only one report has a result, it's a difference.
 
         if    (scalar(@refMis) == 0) {
+            $diff = "reg";
             ($regkey, $regdiff, $reg1, $reg2, $reg3) = split('\0', $regMis[0]);
             shift @regMis;
         }
 
         elsif (scalar(@regMis) == 0) {
+            $diff = "ref";
             ($refkey, $refdiff, $ref1, $ref2, $ref3) = split('\0', $refMis[0]);
             shift @refMis;
         }
