@@ -22,12 +22,12 @@ mbg=""
 ali=""
 
 
-if [ -e /data/rautiainenma/MBG/bin/MBG ] ; then
-  mbg="--mbg /data/rautiainenma/MBG/bin/MBG"
+if [ -e /data/walenzbp/verkko-regression/binaries/MBG ] ; then
+  mbg="--mbg /data/walenzbp/verkko-regression/binaries/MBG"
 fi
 
-if [ -e /data/rautiainenma/GraphAligner/bin/GraphAligner ] ; then
-  ali="--graphaligner /data/rautiainenma/GraphAligner/bin/GraphAligner"
+if [ -e /data/walenzbp/verkko-regression/binaries/GraphAligner ] ; then
+  ali="--graphaligner /data/walenzbp/verkko-regression/binaries/GraphAligner"
 fi
 
 
@@ -40,9 +40,9 @@ if [ -e ../recipes/$recp/reads-ont ] ; then
 fi
 
 
-./verkko/bin/verkko --slurm \
-  -d $recp \
-  $mbg \
-  $ali \
-  $hifi \
-  $nano
+if [ -e ../recipes/$recp/kmers ] ; then
+  kmers="--hap-kmers ../recipes/$recp/kmers/hap1.meryl ../recipes/$recp/kmers/hap1.meryl hic"
+fi
+
+
+./verkko/bin/verkko --keep-intermediate --slurm -d $recp $mbg $ali $kmers $hifi $nano
