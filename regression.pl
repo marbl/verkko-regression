@@ -150,7 +150,9 @@ $errs .= "ERROR: Exactly one of -latest, -date, -hash or -path must be supplied.
 $errs .= "ERROR: Exactly one of -latest, -date, -hash or -path must be supplied.\n"   if ( defined($date) &&  defined($hash) && ($path eq "") && ($doList eq "")) ;
 $errs .= "ERROR: Test file 'recipe/$tests' doesn't exist.\n"                          if ((defined($tests)) && (! -e "recipes/$tests"));
 $errs .= "ERROR: -path path must be to root of git clone.\n"                          if (($path ne "") && (! -e "$path/.git"));
-
+$errs .= "ERROR: 'cargo' not in \$PATH, cannot build rukki.\n"                        if (system("which cargo > /dev/null 2>& 1") != 0);
+$errs .= "ERROR: neither 'sbatch' nor 'qsub' in \$PATH, cannot submit jobs.\n"        if ((system("which sbatch > /dev/null 2>&1") != 0) &&
+                                                                                          (system("which qsub > /dev/null 2>&1") != 0));
 
 if (($doHelp) || ($errs ne "")) {
     print "usage: $0 [options] [recipe-class | recipe-list]\n";
