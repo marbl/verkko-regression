@@ -43,89 +43,82 @@ sub runCommand ($$) {
 }
 
 
+sub branchExists ($$) {
+    my $dir    = shift @_;
+    my $branch = shift @_;
+    my $found  = 0;
 
-sub updateRepo ($) {
+    print "branchExists($branch)-\n";
+
+    my @branches = runCommand($dir, "git branch -a -vv");
+
+    foreach (@branches) {
+        $found = 1   if (m!remotes/origin/$branch!);
+        print "branchExists($branch)- $found - $_\n";
+    }
+
+    return($found);
+}
+
+
+sub updateRepo ($$) {
     my $dir        = shift @_;
+    my $branch     = shift @_;
     my $logsummary = "";
-    my @lines;
 
     #
-    #  Switch to the master branch, and make sure the code is up-to-date with
-    #  it.  We don't really care what the output is, this is just to make the
-    #  eventual 'merge' actually update the code for the master branch.
+    #  Fetch updates, then figure out where we should base changes from.
     #
-    #  checkout will usually report:
-    #      Already on 'master'
-    #      Your branch is up to date with 'origin/master'.
+    #  We need to remember if the branch exists before we fetch updates, so
+    #  we can base logging from either the common ancestor (if it doesn't
+    #  exist) or the last known commit in the branch.
     #
-    #  merge will usually report:
-    #      Already up to date.
+    #  This isn't really perfect, since there is no (easy) way to get the
+    #  changes between the fetch and the last run of regression; we assume
+    #  that whatever is in the repo before fetch is the last run.
     #
-
-    #
-    #  Report what we have now.  If it doesn't report
-    #      On branch master
-    #      Your branch is up to date with 'origin/master'.
-    #
-    #      nothing to commit, working tree clean
-    #  then something is amiss and we should log it.
-    #
-
-    #  Final status should report:
-    #    On branch master
-    #    Your branch is up to date with 'origin/master'.
-    #
-    #    nothing to commit, working tree clean
-
-
-    #  To update the repo and keep logs of what was done:
-    #    - Make sure we're on the master branch.
-    #    - Make sure that branch is up-to-date with what the
-    #      local repo knows about.
-    #    - Pull down new changes *only* for this repo, generate
-    #      a log of them, and merge them into the current code.
-    #
-    my @initstat     = runCommand($dir, "git status");
-    my @checkout     = runCommand($dir, "git checkout master");
-    my @checkmerge   = runCommand($dir, "git merge");
-    my @checkstatus  = runCommand($dir, "git status");
-
-    my @newfetch     = runCommand($dir, "git fetch --no-recurse-submodules");
-    my @newlogs      = runCommand($dir, "git log --numstat ..origin/master");
-
-    my @newmerge     = runCommand($dir, "git merge");
-    my @finalstatus  = runCommand($dir, "git status");
-
-    #  Now that all the work is done, make sense of the logs and decide if
-    #  anything has changed.
-
-    #  We don't really care about @initstat, @checkout, @checkmerge.
-    #  @checkstatus should report we are "On branch master" and "up to date".
-    #  It'll probably report there is an untracked file 'date-to-hash'.
-
-    if (($checkstatus[0] !~ m/branch master/) ||
-        ($checkstatus[1] !~ m/up to date/)) {
-    }
-
-    #  The fetch will report a bunch of gunk, but also report
-    #  status of tags:
+    #  There are three cases for finding where to report logs from:
+    #    1) updating master               - use the current master HEAD
+    #    2) updating a branch that exists - use the current branch HEAD
+    #    3) the branch doesn't exist      - use the common ancestor
     #  
-    #      From github.com:marbl/canu
-    #         76b1263fe..af771ef2c  master          -> origin/master
-    #         21b8bd08d..14045343c  microasm_ovls_2 -> origin/microasm_ovls_2
-    #       * [new branch]          trimming-test   -> origin/trimming-test
+    #  (the first two are actually the same).
     #
-    #  We parse it out....but never use it.
 
-    my $oldhash = "";
-    my $newhash = "";
-    
-    foreach my $line (@newfetch) {
-        if ($line =~ m!^\s+(.*)\.\.(.*)\s+master\s+->\s+origin/master!) {
-            $oldhash = $1;
-            $newhash = $2;
-        }
+    my $be    = branchExists($dir, $branch);
+    my @fetch = runCommand($dir, "git fetch --no-recurse-submodules");
+    my $logbase;
+
+    if    ($branch eq "master") {
+        $logbase = (runCommand($dir, "git rev-parse master"))[0];
+        print "logbase 1 $logbase\n";
     }
+    elsif ($be) {
+        $logbase = (runCommand($dir, "git rev-parse $branch"))[0];
+        print "logbase 2 $logbase\n";
+    }
+    else {
+        $logbase = (runCommand($dir, "git merge-base master origin/$branch"))[0];
+        print "logbase 3 $logbase\n";
+    }
+
+    #
+    #  Pull the logs between the last state of the repo (or the common
+    #  ancestor) and the state at github.
+    #
+
+    my @logs = runCommand($dir, "git log --numstat $logbase..origin/$branch");
+
+    #
+    #  And, finally, checkout that most recent branch.  This does leave us in
+    #  a 'detached HEAD' state but we don't care as long as the bits are
+    #  correct.
+    #
+
+    my @checkout = runCommand($dir, "git checkout $branch");
+    my @merge    = runCommand($dir, "git merge --ff");
+
+
 
     #  The log will have many items like
     #
@@ -152,7 +145,7 @@ sub updateRepo ($) {
     my $log;
     my %where;
 
-    foreach my $line (@newlogs) {
+    foreach my $line (@logs) {
         if (!defined($author) && ($line =~ m!^Author:.*<(.*)\@.*>$!)) {
             $author = $1;
         }

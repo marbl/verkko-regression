@@ -369,6 +369,48 @@ if (($doFetch) && ($path eq "") && (! -d $gitrepo)) {
 }
 
 #
+#  FETCH UPDATES: Fetch and apply any updates.  Posting of the logs is
+#  disabled because they're a bit verbose.
+#
+
+if (($doFetch) && ($path eq "") && (-d $gitrepo)) {
+    my @rp;
+    my @ch;
+
+    push @rp, "$gitrepo";
+    push @ch, updateRepo("$gitrepo", $branch);
+
+    open(F, "cd $gitrepo && git submodule status --recursive |");
+    while (<F>) {
+        chomp;
+
+        if      (m/^.(.*)\s+(.*)\s\((.*)\)$/) {
+            push @rp, "$2 ($3)";
+            push @ch, updateRepo("$gitrepo/$2", "master");
+        } elsif (m/^.(.*)\s+(.*)$/) {
+            push @rp, "$2";
+            push @ch, updateRepo("$gitrepo/$2", "master");
+        } else {
+            push @rp, "PARSE FAILURE";
+            push @ch, "$_\n";
+        }
+    }
+    close(F);
+
+    if (join("", @ch) ne "") {
+        postHeading("*Update $repo* branch $branch in '$gitrepo'.");
+
+        while (scalar(@rp) > 0) {
+            my $rp = shift @rp;
+            my $ch = shift @ch;
+            postFormattedText("*$rp changes*:", $ch)   if ($ch ne "");
+        }
+    } else {
+        postHeading("*No changes* for branch $branch in '$gitrepo'.");
+    }
+}
+
+#
 #  SWITCH BRANCH: Switch the repo to the requested branch if we're not there
 #  already.
 #
@@ -400,51 +442,6 @@ if (($path eq "") && (-d $gitrepo)) {
         unlink "$gitrepo/update.log";
 
         postFormattedText("*Switch from branch '$onBranch' to branch '$branch'.*", $lines);
-    }
-}
-
-#
-#  FETCH UPDATES: Fetch and apply any updates.  This could be done _before_
-#  switching to the correct branch, but then we'd need to do basically the
-#  same thing again to update the branch we just switched to.
-#
-#  Posting of the logs is disabled because they're a bit verbose.
-#
-
-if (($doFetch) && ($path eq "") && (-d $gitrepo)) {
-    my @rp;
-    my @ch;
-
-    push @rp, "$gitrepo";
-    push @ch, updateRepo("$gitrepo");
-
-    open(F, "cd $gitrepo && git submodule status --recursive |");
-    while (<F>) {
-        chomp;
-
-        if      (m/^.(.*)\s+(.*)\s\((.*)\)$/) {
-            push @rp, "$2 ($3)";
-            push @ch, updateRepo("$gitrepo/$2");
-        } elsif (m/^.(.*)\s+(.*)$/) {
-            push @rp, "$2";
-            push @ch, updateRepo("$gitrepo/$2");
-        } else {
-            push @rp, "PARSE FAILURE";
-            push @ch, "$_\n";
-        }
-    }
-    close(F);
-
-    if (join("", @ch) ne "") {
-        postHeading("*Update $repo* branch $branch in '$gitrepo'.");
-
-        while (scalar(@rp) > 0) {
-            my $rp = shift @rp;
-            my $ch = shift @ch;
-            postFormattedText("*$rp changes*:", $ch)   if ($ch ne "");
-        }
-    } else {
-        postHeading("*No changes* for branch $branch in '$gitrepo'.");
     }
 }
 
