@@ -422,8 +422,11 @@ if (($doFetch) && ($path eq "") && (-d $gitrepo)) {
     while (<F>) {
         chomp;
 
-        if (m/^.(.*)\s+(.*)\s\((.*)\)$/) {
+        if      (m/^.(.*)\s+(.*)\s\((.*)\)$/) {
             push @rp, "$2 ($3)";
+            push @ch, updateRepo("$gitrepo/$2");
+        } elsif (m/^.(.*)\s+(.*)$/) {
+            push @rp, "$2";
             push @ch, updateRepo("$gitrepo/$2");
         } else {
             push @rp, "PARSE FAILURE";
