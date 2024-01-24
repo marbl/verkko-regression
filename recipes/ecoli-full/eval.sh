@@ -36,7 +36,7 @@ fi
 
 if [ ! -e quast/report.txt ] ; then
   $quast \
-    --threads 4 \
+    --threads 1 \
     --min-identity 98. \
     --skip-unaligned-mis-contigs \
     --scaffold-gap-max-size 5000000 \

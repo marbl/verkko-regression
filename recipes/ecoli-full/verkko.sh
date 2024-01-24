@@ -40,4 +40,4 @@ if [ -e ../recipes/$recp/reads-ont ] ; then
 fi
 
 
-./verkko/bin/verkko --keep-intermediate -d $recp $mbg $ali $hifi $nano
+./verkko/bin/verkko --ali-run 8 24 4 --mbg-run 4 60 4 --cns-run 4 60 4 --sge --keep-intermediate -d $recp $mbg $ali $hifi $nano

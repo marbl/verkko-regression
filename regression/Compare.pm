@@ -33,7 +33,11 @@ sub loadContigReport ($) {
 
     my ($type, $ml, $aid, $b1, $e1, $b2, $e2, $l1, $l2, $idt, $n1, $n2) = ("", 0);
 
-    open(IN, "< $report") or die "failed to open '$report' for reading: $!\n";
+    if (! -e "$report") {
+        return(0, @misasm);
+    }
+
+    open(IN, "< $report");
     while (<IN>) {
         s/^\s+//;
         s/\s+$//;

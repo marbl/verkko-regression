@@ -1,0 +1,11 @@
+time /work/verkko/bin/verkko         -d old --hifi reads/ecoli-hifi/ecoli_hifi_subset24x.fastq.gz --nano reads/ecoli-ont/ecoli_ont_subset50x.fastq.gz --correct-batch-size 1000
+time /work/verkko-release/bin/verkko -d new --hifi reads/ecoli-hifi/ecoli_hifi_subset24x.fastq.gz --nano reads/ecoli-ont/ecoli_ont_subset50x.fastq.gz
+
+/work/verkko/bin/verkko -d ecolihic --snakeopts=-dryrun \
+  --hic1 a.fastq \
+  --hic2 b.fastq \
+  --hifi /devel/verkko-regression/reads/ecoli-hifi/ecoli_hifi_subset24x.fastq.gz \
+  --nano /devel/verkko-regression/reads/ecoli-ont/ecoli_ont_subset50x.fastq.gz
+
+
+

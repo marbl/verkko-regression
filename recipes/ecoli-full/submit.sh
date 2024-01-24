@@ -52,12 +52,12 @@ mem_gb=8
 time_h=96
 
 if [ "x$slurm" != "x" ] ; then
-  jobvid=$(sbatch --parsable                           --cpus-per-task 8 --mem 32g --time 96:00:00 --output $recp-verkko.out ../recipes/$recp/verkko.sh $recp)
-  jobeid=$(sbatch --parsable --depend=afterany:$jobvid --cpus-per-task 8 --mem 32g --time 24:00:00 --output $recp-eval.out   ../recipes/$recp/eval.sh   $recp)
+  jobvid=$(sbatch --parsable                           --cpus-per-task 1 --mem 32g --time 96:00:00 --output $recp-verkko.out ../recipes/$recp/verkko.sh $recp)
+  jobeid=$(sbatch --parsable --depend=afterany:$jobvid --cpus-per-task 1 --mem 32g --time 24:00:00 --output $recp-eval.out   ../recipes/$recp/eval.sh   $recp)
 
 elif [ "x$sge" != "x" ] ; then
-  jobvid=$(qsub -terse                   -cwd -V -pe thread 8 -l memory=4g -j y -o $recp-verkko.out ../recipes/$recp/verkko.sh $recp)
-  jobeid=$(qsub -terse -hold_jid $jobvid -cwd -V -pe thread 8 -l memory=4g -j y -o $recp-eval.out   ../recipes/$recp/eval.sh   $recp)
+  jobvid=$(qsub -terse                   -cwd -V -pe thread 1 -l memory=4g -j y -o $recp-verkko.out ../recipes/$recp/verkko.sh $recp)
+  jobeid=$(qsub -terse -hold_jid $jobvid -cwd -V -pe thread 1 -l memory=4g -j y -o $recp-eval.out   ../recipes/$recp/eval.sh   $recp)
 
 else
   echo "Unknown grid; no jobs submitted."
